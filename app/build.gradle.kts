@@ -87,6 +87,11 @@ dependencies {
     // Permissions
     implementation(libs.permissionsx)
 
+    implementation(libs.androidx.lifecycle.runtime.compose)
+
+    // Material Icons Extended
+    implementation(libs.androidx.compose.material.icons.extended)
+
     // Testing
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)
@@ -95,4 +100,5 @@ dependencies {
     androidTestImplementation(libs.androidx.compose.ui.test.junit4)
     debugImplementation(libs.androidx.compose.ui.tooling)
     debugImplementation(libs.androidx.compose.ui.test.manifest)
+    implementation(libs.androidx.navigation.compose)
 }
