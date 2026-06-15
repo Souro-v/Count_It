@@ -2,7 +2,6 @@ package com.example.count_it.ui.screens
 
 import android.graphics.Bitmap
 import androidx.compose.foundation.Image
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -23,6 +22,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.count_it.data.NutritionInfo
 import com.example.count_it.viewmodel.FoodViewModel
+import kotlin.math.roundToInt
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -33,8 +33,10 @@ fun ResultScreen(
 ) {
     val uiState by viewModel.uiState.collectAsState()
 
-    // Search input state
-    var searchQuery by remember { mutableStateOf("") }
+    // Pre-fill search with AI detected food name
+    var searchQuery by remember(uiState.detectedFoodName) {
+        mutableStateOf(uiState.detectedFoodName ?: "")
+    }
 
     // Show success dialog state
     var showSaveDialog by remember { mutableStateOf(false) }
@@ -75,9 +77,22 @@ fun ResultScreen(
         ) {
             Spacer(modifier = Modifier.height(8.dp))
 
-            // Show captured image
+            // Show captured food image
             uiState.capturedImage?.let { bitmap ->
                 CapturedImageCard(bitmap = bitmap)
+            }
+
+            // Show AI detection result if available
+            uiState.detectedFoodName?.let { detectedName ->
+                AIDetectionCard(
+                    detectedName = detectedName,
+                    confidence = uiState.detectionConfidence
+                )
+            }
+
+            // Loading indicator while AI analyzing
+            if (uiState.isLoading) {
+                AILoadingCard()
             }
 
             // Manual food search section
@@ -139,6 +154,106 @@ fun ResultScreen(
     }
 }
 
+// AI detection result card
+@Composable
+fun AIDetectionCard(
+    detectedName: String,
+    confidence: Float
+) {
+    val confidencePercent = (confidence * 100).roundToInt()
+
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(16.dp),
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.secondaryContainer
+        )
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                Text(text = "🤖", fontSize = 28.sp)
+                Column {
+                    Text(
+                        text = "AI Detected",
+                        fontSize = 12.sp,
+                        color = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.7f)
+                    )
+                    Text(
+                        text = detectedName,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 16.sp
+                    )
+                }
+            }
+
+            // Confidence badge
+            Card(
+                shape = RoundedCornerShape(20.dp),
+                colors = CardDefaults.cardColors(
+                    containerColor = when {
+                        confidencePercent >= 70 -> Color(0xFF4CAF50)
+                        confidencePercent >= 40 -> Color(0xFFFF9800)
+                        else -> Color(0xFFF44336)
+                    }
+                )
+            ) {
+                Text(
+                    text = "$confidencePercent%",
+                    color = Color.White,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 13.sp,
+                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
+                )
+            }
+        }
+    }
+}
+
+// Loading card while AI is analyzing
+@Composable
+fun AILoadingCard() {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(16.dp),
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp),
+            horizontalArrangement = Arrangement.spacedBy(16.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            CircularProgressIndicator(
+                modifier = Modifier.size(28.dp),
+                strokeWidth = 3.dp
+            )
+            Column {
+                Text(
+                    text = "AI Analyzing...",
+                    fontWeight = FontWeight.SemiBold,
+                    fontSize = 15.sp
+                )
+                Text(
+                    text = "Detecting food and fetching nutrition info",
+                    fontSize = 12.sp,
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                )
+            }
+        }
+    }
+}
+
 // Captured food image card
 @Composable
 fun CapturedImageCard(bitmap: Bitmap) {
@@ -185,7 +300,7 @@ fun SearchFoodSection(
             )
 
             Text(
-                text = "Enter food name to get nutrition info",
+                text = "AI detected name is pre-filled. Edit if needed.",
                 fontSize = 13.sp,
                 color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
             )
@@ -213,13 +328,6 @@ fun SearchFoodSection(
                     enabled = !isLoading && query.isNotBlank(),
                     modifier = Modifier
                         .size(52.dp)
-                        .background(
-                            color = if (!isLoading && query.isNotBlank())
-                                MaterialTheme.colorScheme.primary
-                            else
-                                MaterialTheme.colorScheme.surfaceVariant,
-                            shape = RoundedCornerShape(12.dp)
-                        )
                 ) {
                     if (isLoading) {
                         CircularProgressIndicator(
@@ -231,7 +339,7 @@ fun SearchFoodSection(
                             imageVector = Icons.Default.Search,
                             contentDescription = "Search",
                             tint = if (query.isNotBlank())
-                                Color.White
+                                MaterialTheme.colorScheme.primary
                             else
                                 MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -307,7 +415,7 @@ fun NutritionResultCard(nutritionInfo: NutritionInfo) {
                 color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.1f)
             )
 
-            // Macros row - protein, carbs, fat
+            // Macros row
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceEvenly

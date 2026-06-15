@@ -40,6 +40,20 @@ android {
     buildFeatures {
         compose = true
     }
+
+    // Prevent TFLite model compression
+    androidResources {
+        noCompress += "tflite"
+    }
+
+    // Fix packaging conflicts
+    packaging {
+        resources {
+            excludes += "/META-INF/{AL2.0,LGPL2.1}"
+            excludes += "META-INF/DEPENDENCIES"
+        }
+    }
+
 }
 
 dependencies {
