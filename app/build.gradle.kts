@@ -84,6 +84,10 @@ dependencies {
     implementation(libs.kotlinx.coroutines.android)
     implementation(libs.kotlinx.coroutines.core)
 
+    // TensorFlow Lite Task Vision
+    implementation(libs.tensorflow.lite.task.vision)
+    implementation(libs.tensorflow.lite.support)
+
     // Permissions
     implementation(libs.permissionsx)
 
