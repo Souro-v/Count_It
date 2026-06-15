@@ -6,11 +6,14 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.count_it.data.FoodEntity
 import com.example.count_it.data.NutritionInfo
+import com.example.count_it.ml.FoodImageAnalyzer
 import com.example.count_it.repository.FoodRepository
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 // UI State data class to hold all screen states
 data class FoodUiState(
@@ -19,12 +22,17 @@ data class FoodUiState(
     val nutritionInfo: NutritionInfo? = null,
     val capturedImage: Bitmap? = null,
     val todayCalories: Int = 0,
-    val searchQuery: String = ""
+    val searchQuery: String = "",
+    val detectedFoodName: String? = null,
+    val detectionConfidence: Float = 0f
 )
 
 class FoodViewModel(application: Application) : AndroidViewModel(application) {
 
     private val repository = FoodRepository(application)
+
+    // Initialize food image analyzer
+    private val foodAnalyzer = FoodImageAnalyzer(application)
 
     // UI State
     private val _uiState = MutableStateFlow(FoodUiState())
@@ -73,15 +81,46 @@ class FoodViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    // ==================== Camera Actions ====================
+    // ==================== Camera + AI Actions ====================
 
-    // Called when user captures an image from camera
+    // Called when user captures image - auto analyze with AI
     fun onImageCaptured(bitmap: Bitmap) {
-        _uiState.value = _uiState.value.copy(
-            capturedImage = bitmap,
-            isLoading = true,
-            errorMessage = null
-        )
+        viewModelScope.launch {
+            _uiState.value = _uiState.value.copy(
+                capturedImage = bitmap,
+                isLoading = true,
+                errorMessage = null,
+                detectedFoodName = null
+            )
+
+            // Run AI analysis on background thread
+            val results = withContext(Dispatchers.IO) {
+                foodAnalyzer.analyze(bitmap)
+            }
+
+            if (results.isNotEmpty()) {
+                val topResult = results.first()
+                val cleanFoodName = topResult.label
+                    .replace("_", " ")
+                    .trim()
+
+                _uiState.value = _uiState.value.copy(
+                    detectedFoodName = cleanFoodName,
+                    detectionConfidence = topResult.confidence,
+                    isLoading = false
+                )
+
+                // Auto search for detected food
+                searchFood(cleanFoodName)
+
+            } else {
+                // No food detected, user can search manually
+                _uiState.value = _uiState.value.copy(
+                    isLoading = false,
+                    errorMessage = "Could not detect food. Please search manually."
+                )
+            }
+        }
     }
 
     // ==================== Search Food ====================
@@ -102,7 +141,9 @@ class FoodViewModel(application: Application) : AndroidViewModel(application) {
                     _uiState.value = _uiState.value.copy(
                         isLoading = false,
                         nutritionInfo = nutritionInfo,
-                        errorMessage = if (nutritionInfo == null) "No food found" else null
+                        errorMessage = if (nutritionInfo == null)
+                            "No food found. Try another name."
+                        else null
                     )
                 },
                 onFailure = { error ->
@@ -134,7 +175,8 @@ class FoodViewModel(application: Application) : AndroidViewModel(application) {
             _uiState.value = _uiState.value.copy(
                 nutritionInfo = null,
                 capturedImage = null,
-                searchQuery = ""
+                searchQuery = "",
+                detectedFoodName = null
             )
         }
     }
@@ -166,7 +208,14 @@ class FoodViewModel(application: Application) : AndroidViewModel(application) {
     fun clearResult() {
         _uiState.value = _uiState.value.copy(
             nutritionInfo = null,
-            capturedImage = null
+            capturedImage = null,
+            detectedFoodName = null
         )
+    }
+
+    // Clean up resources when ViewModel is destroyed
+    override fun onCleared() {
+        super.onCleared()
+        foodAnalyzer.close()
     }
 }
